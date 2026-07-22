@@ -40,14 +40,16 @@ local THEME = {
     TextOff      = Color3.fromRGB(255, 210, 90),
 }
 
--- Itens do menu: BLITZ CURLER OPTIMIZER (otimização), AIMBOT
--- (na verdade, reduz as sombras do jogo — nome é só uma
--- brincadeira para os amigos) e CONTADOR DE PING (mostra o
--- ping ao vivo na tela)
+-- Itens do menu: prtt71 (otimização), AIMBOT (reduz sombras),
+-- CONTADOR DE PING, COORDENADAS, CONTADOR DE FPS e
+-- MODO PRETO E BRANCO — todas com função real
 local MENU_ITEMS = {
     "prtt71",
     "AIMBOT",
     "CONTADOR DE PING",
+    "COORDENADAS",
+    "CONTADOR DE FPS",
+    "MODO PRETO E BRANCO",
 }
 
 ----------------------------------------------------------------
@@ -181,6 +183,45 @@ local function getPingMs()
     return nil
 end
 
+----------------------------------------------------------------
+-- FUNÇÃO REUTILIZÁVEL: tornar qualquer GuiObject arrastável
+----------------------------------------------------------------
+
+local function makeDraggable(guiObject)
+    guiObject.Active = true
+
+    local dragging = false
+    local dragStart, startPos
+
+    guiObject.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = guiObject.Position
+
+            local conn
+            conn = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    conn:Disconnect()
+                end
+            end)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            guiObject.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
 local function createPingLabel()
     if PingLabel and PingLabel.Parent then return end
 
@@ -200,6 +241,8 @@ local function createPingLabel()
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = PingLabel
+
+    makeDraggable(PingLabel)
 end
 
 local function enablePingCounter()
@@ -223,6 +266,148 @@ local function disablePingCounter()
     end
     if PingLabel then
         PingLabel.Visible = false
+    end
+end
+
+----------------------------------------------------------------
+-- LÓGICA REAL: MOSTRAR COORDENADAS AO VIVO
+----------------------------------------------------------------
+
+local CoordsLabel
+local coordsConn
+
+local function createCoordsLabel()
+    if CoordsLabel and CoordsLabel.Parent then return end
+
+    CoordsLabel = Instance.new("TextLabel")
+    CoordsLabel.Name = "CoordsCounter"
+    CoordsLabel.AnchorPoint = Vector2.new(0.5, 0)
+    CoordsLabel.Size = UDim2.new(0, 240, 0, 36)
+    CoordsLabel.Position = UDim2.new(0.5, 0, 0, 64)
+    CoordsLabel.BackgroundColor3 = THEME.Background
+    CoordsLabel.BackgroundTransparency = 0.2
+    CoordsLabel.Text = "X: 0  Y: 0  Z: 0"
+    CoordsLabel.Font = Enum.Font.GothamBold
+    CoordsLabel.TextSize = 14
+    CoordsLabel.TextColor3 = THEME.AccentLight
+    CoordsLabel.Parent = ScreenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = CoordsLabel
+
+    makeDraggable(CoordsLabel)
+end
+
+local function enableCoords()
+    createCoordsLabel()
+    CoordsLabel.Visible = true
+
+    if not coordsConn then
+        coordsConn = RunService.Heartbeat:Connect(function()
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local pos = hrp.Position
+                CoordsLabel.Text = string.format(
+                    "X: %.1f  Y: %.1f  Z: %.1f", pos.X, pos.Y, pos.Z
+                )
+            end
+        end)
+    end
+end
+
+local function disableCoords()
+    if coordsConn then
+        coordsConn:Disconnect()
+        coordsConn = nil
+    end
+    if CoordsLabel then
+        CoordsLabel.Visible = false
+    end
+end
+
+----------------------------------------------------------------
+-- LÓGICA REAL: CONTADOR DE FPS AO VIVO
+----------------------------------------------------------------
+
+local FpsLabel
+local fpsConn
+local fpsFrames = 0
+local fpsTimer = 0
+
+local function createFpsLabel()
+    if FpsLabel and FpsLabel.Parent then return end
+
+    FpsLabel = Instance.new("TextLabel")
+    FpsLabel.Name = "FpsCounter"
+    FpsLabel.AnchorPoint = Vector2.new(0.5, 0)
+    FpsLabel.Size = UDim2.new(0, 140, 0, 36)
+    FpsLabel.Position = UDim2.new(0.5, 0, 0, 108)
+    FpsLabel.BackgroundColor3 = THEME.Background
+    FpsLabel.BackgroundTransparency = 0.2
+    FpsLabel.Text = "FPS: --"
+    FpsLabel.Font = Enum.Font.GothamBold
+    FpsLabel.TextSize = 16
+    FpsLabel.TextColor3 = THEME.AccentLight
+    FpsLabel.Parent = ScreenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = FpsLabel
+
+    makeDraggable(FpsLabel)
+end
+
+local function enableFpsCounter()
+    createFpsLabel()
+    FpsLabel.Visible = true
+    fpsFrames = 0
+    fpsTimer = 0
+
+    if not fpsConn then
+        fpsConn = RunService.Heartbeat:Connect(function(dt)
+            fpsFrames += 1
+            fpsTimer += dt
+            if fpsTimer >= 0.5 then
+                local fps = math.floor(fpsFrames / fpsTimer)
+                FpsLabel.Text = "FPS: " .. fps
+                fpsFrames = 0
+                fpsTimer = 0
+            end
+        end)
+    end
+end
+
+local function disableFpsCounter()
+    if fpsConn then
+        fpsConn:Disconnect()
+        fpsConn = nil
+    end
+    if FpsLabel then
+        FpsLabel.Visible = false
+    end
+end
+
+----------------------------------------------------------------
+-- LÓGICA REAL: MODO PRETO E BRANCO (conforto noturno)
+----------------------------------------------------------------
+
+local ColorCorrection
+
+local function enableBlackAndWhite()
+    if not ColorCorrection then
+        ColorCorrection = Instance.new("ColorCorrectionEffect")
+        ColorCorrection.Name = "BlackAndWhiteEffect"
+        ColorCorrection.Parent = Lighting
+    end
+    ColorCorrection.Saturation = -1
+    ColorCorrection.Enabled = true
+end
+
+local function disableBlackAndWhite()
+    if ColorCorrection then
+        ColorCorrection.Enabled = false
     end
 end
 
@@ -254,8 +439,8 @@ BubbleCorner.Parent = Bubble
 -- ==== PAINEL PRINCIPAL ====
 local Panel = Instance.new("Frame")
 Panel.Name = "Panel"
-Panel.Size = UDim2.new(0, 420, 0, 340)
-Panel.Position = UDim2.new(0, 100, 0.5, -170)
+Panel.Size = UDim2.new(0, 420, 0, 480)
+Panel.Position = UDim2.new(0, 100, 0.5, -240)
 Panel.BackgroundColor3 = THEME.Background
 Panel.Visible = false
 Panel.ClipsDescendants = true
@@ -359,6 +544,9 @@ local function addToggleRow(name, order)
     local isOptimizer = (name == "prtt71")
     local isShadowToggle = (name == "AIMBOT")
     local isPingToggle = (name == "CONTADOR DE PING")
+    local isCoordsToggle = (name == "COORDENADAS")
+    local isFpsToggle = (name == "CONTADOR DE FPS")
+    local isBwToggle = (name == "MODO PRETO E BRANCO")
 
     row.MouseButton1Click:Connect(function()
         state = not state
@@ -397,6 +585,30 @@ local function addToggleRow(name, order)
                 disablePingCounter()
             end
         end
+
+        if isCoordsToggle then
+            if state then
+                enableCoords()
+            else
+                disableCoords()
+            end
+        end
+
+        if isFpsToggle then
+            if state then
+                enableFpsCounter()
+            else
+                disableFpsCounter()
+            end
+        end
+
+        if isBwToggle then
+            if state then
+                enableBlackAndWhite()
+            else
+                disableBlackAndWhite()
+            end
+        end
     end)
 end
 
@@ -422,10 +634,12 @@ Footer.Parent = Panel
 
 local function togglePanel()
     Panel.Visible = not Panel.Visible
+    Bubble.Visible = not Panel.Visible
 end
 
 local function closePanel()
     Panel.Visible = false
+    Bubble.Visible = true
 end
 
 CloseButton.MouseButton1Click:Connect(closePanel)
