@@ -186,8 +186,9 @@ local function createPingLabel()
 
     PingLabel = Instance.new("TextLabel")
     PingLabel.Name = "PingCounter"
+    PingLabel.AnchorPoint = Vector2.new(0.5, 0)
     PingLabel.Size = UDim2.new(0, 140, 0, 36)
-    PingLabel.Position = UDim2.new(0, 20, 0, 20)
+    PingLabel.Position = UDim2.new(0.5, 0, 0, 20)
     PingLabel.BackgroundColor3 = THEME.Background
     PingLabel.BackgroundTransparency = 0.2
     PingLabel.Text = "PING: --ms"
