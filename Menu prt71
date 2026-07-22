@@ -1,18 +1,15 @@
 --[[
-    BLITZ CURLER OPTIMIZER — VERSÃO COM 1 FUNÇÃO REAL
-    ----------------------------------------------------
+    BLITZ CURLER OPTIMIZER — VERSÃO SOMENTE VISUAL (5 ITENS)
+    ----------------------------------------------------------
     Bolinha arrastável (com imagem customizada) + painel
-    roxo/azul, com APENAS UMA opção funcional: Otimização
-    Gráfica. Também tem uma faixa "MINIMIZAR MENU" no
-    rodapé, igual ao estilo do menu original.
+    roxo/azul, com 5 itens de menu:
+    AIMBOT, BLITZ CURLER OPTIMIZER, ESP, TEAM CHECK, TP BASE CRIMINAL
 
-    O que a opção "OTIMIZAÇÃO GRÁFICA" faz quando ativada:
-    - Remove Texture/Decal do workspace
-    - Deixa todas as BaseParts com material SmoothPlastic
-      e Reflectance 0
-    - Desativa ParticleEmitter e Trail
-    - Continua aplicando isso a objetos novos que entrarem
-      no workspace, enquanto a opção estiver ligada
+    IMPORTANTE: nenhum desses botões executa qualquer função
+    de jogo. Cada um SOMENTE troca o próprio texto/cor entre
+    ON e OFF (efeito visual). Não há mira automática, não há
+    detecção de jogadores, não há teleporte, não há nada que
+    altere o comportamento do jogo — é só a casca da interface.
 
     Como usar:
     - Cole este script em um LocalScript dentro do StarterGui.
@@ -23,6 +20,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local ScreenGui -- declarado aqui, criado mais abaixo
 
 ----------------------------------------------------------------
 -- CONFIGURAÇÃO VISUAL
@@ -42,21 +40,57 @@ local THEME = {
     TextOff      = Color3.fromRGB(255, 210, 90),
 }
 
+-- Itens do menu: BLITZ CURLER OPTIMIZER (otimização), AIMBOT
+-- (na verdade, reduz as sombras do jogo — nome é só uma
+-- brincadeira para os amigos) e CONTADOR DE PING (mostra o
+-- ping ao vivo na tela)
+local MENU_ITEMS = {
+    "BLITZ CURLER OPTIMIZER",
+    "AIMBOT",
+    "CONTADOR DE PING",
+}
+
 ----------------------------------------------------------------
--- LÓGICA REAL: OTIMIZAÇÃO GRÁFICA
+-- LÓGICA REAL: OTIMIZAÇÃO GRÁFICA (item BLITZ CURLER OPTIMIZER)
 ----------------------------------------------------------------
+-- Observação importante: Texturas e Decais são DELETADOS pela
+-- otimização (Destroy()). Uma vez deletados, não existe forma
+-- de "recriar" o objeto original — isso é uma limitação de
+-- qualquer script que apague instâncias, não só deste.
+-- Já Material, Reflectance, e Enabled (de partículas/trails)
+-- são apenas alterados, então guardamos o valor original de
+-- cada um para poder devolver de verdade ao desativar.
 
 local OPTIMIZE_ENABLED = false
 local descendantConn
+local originalValues = {} -- [instancia] = {Material=..., Reflectance=..., Enabled=...}
 
 local function optimize(obj)
     if obj:IsA("Texture") or obj:IsA("Decal") then
-        obj:Destroy()
+        obj:Destroy() -- irreversível: não há como restaurar depois
+
     elseif obj:IsA("BasePart") then
+        if not originalValues[obj] then
+            originalValues[obj] = { Material = obj.Material, Reflectance = obj.Reflectance }
+        end
         obj.Material = Enum.Material.SmoothPlastic
         obj.Reflectance = 0
+
     elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+        if not originalValues[obj] then
+            originalValues[obj] = { Enabled = obj.Enabled }
+        end
         obj.Enabled = false
+    end
+end
+
+local function restoreOne(obj, data)
+    if not obj or not obj.Parent then return end
+    if obj:IsA("BasePart") and data.Material then
+        obj.Material = data.Material
+        obj.Reflectance = data.Reflectance
+    elseif (obj:IsA("ParticleEmitter") or obj:IsA("Trail")) and data.Enabled ~= nil then
+        obj.Enabled = data.Enabled
     end
 end
 
@@ -78,16 +112,124 @@ local function disableOptimization()
         descendantConn:Disconnect()
         descendantConn = nil
     end
-    -- Observação: desligar não desfaz o que já foi otimizado
-    -- (texturas removidas não podem ser restauradas), apenas
-    -- para de aplicar a otimização em objetos novos.
+
+    -- Restaura Material/Reflectance/Enabled de tudo que foi alterado
+    for obj, data in pairs(originalValues) do
+        restoreOne(obj, data)
+    end
+    table.clear(originalValues)
+
+    -- Texturas/Decais destruídos NÃO voltam (foram apagados de vez)
+end
+
+----------------------------------------------------------------
+-- LÓGICA REAL: REDUZIR SOMBRAS (item "AIMBOT" — nome é só
+-- brincadeira, a função só mexe na iluminação/sombras)
+----------------------------------------------------------------
+
+local Lighting = game:GetService("Lighting")
+
+local SHADOWS_ENABLED_ORIGINAL
+local GLOBAL_SHADOWS_ORIGINAL
+
+local function lowShadows()
+    -- Guarda os valores originais na primeira vez, para
+    -- poder devolver depois
+    if SHADOWS_ENABLED_ORIGINAL == nil then
+        SHADOWS_ENABLED_ORIGINAL = Lighting.GlobalShadows
+    end
+
+    Lighting.GlobalShadows = false
+
+    -- Reduz também a sombra "de contato" das partes, se existir
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            v.CastShadow = false
+        end
+    end
+end
+
+local function restoreShadows()
+    if SHADOWS_ENABLED_ORIGINAL ~= nil then
+        Lighting.GlobalShadows = SHADOWS_ENABLED_ORIGINAL
+    end
+
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            v.CastShadow = true
+        end
+    end
+end
+
+----------------------------------------------------------------
+-- LÓGICA REAL: CONTADOR DE PING AO VIVO
+----------------------------------------------------------------
+
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+local PingLabel
+local pingConn
+
+local function getPingMs()
+    local ok, value = pcall(function()
+        return Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+    end)
+    if ok and value then
+        return math.floor(value)
+    end
+    return nil
+end
+
+local function createPingLabel()
+    if PingLabel and PingLabel.Parent then return end
+
+    PingLabel = Instance.new("TextLabel")
+    PingLabel.Name = "PingCounter"
+    PingLabel.Size = UDim2.new(0, 140, 0, 36)
+    PingLabel.Position = UDim2.new(0, 20, 0, 20)
+    PingLabel.BackgroundColor3 = THEME.Background
+    PingLabel.BackgroundTransparency = 0.2
+    PingLabel.Text = "PING: --ms"
+    PingLabel.Font = Enum.Font.GothamBold
+    PingLabel.TextSize = 16
+    PingLabel.TextColor3 = THEME.AccentLight
+    PingLabel.Parent = ScreenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = PingLabel
+end
+
+local function enablePingCounter()
+    createPingLabel()
+    PingLabel.Visible = true
+
+    if not pingConn then
+        pingConn = RunService.Heartbeat:Connect(function()
+            local ms = getPingMs()
+            if ms then
+                PingLabel.Text = "PING: " .. ms .. "ms"
+            end
+        end)
+    end
+end
+
+local function disablePingCounter()
+    if pingConn then
+        pingConn:Disconnect()
+        pingConn = nil
+    end
+    if PingLabel then
+        PingLabel.Visible = false
+    end
 end
 
 ----------------------------------------------------------------
 -- CONSTRUÇÃO DA GUI
 ----------------------------------------------------------------
 
-local ScreenGui = Instance.new("ScreenGui")
+ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "BlitzCurlerOptimizer"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
@@ -111,8 +253,8 @@ BubbleCorner.Parent = Bubble
 -- ==== PAINEL PRINCIPAL ====
 local Panel = Instance.new("Frame")
 Panel.Name = "Panel"
-Panel.Size = UDim2.new(0, 420, 0, 310)
-Panel.Position = UDim2.new(0, 100, 0.5, -155)
+Panel.Size = UDim2.new(0, 420, 0, 340)
+Panel.Position = UDim2.new(0, 100, 0.5, -170)
 Panel.BackgroundColor3 = THEME.Background
 Panel.Visible = false
 Panel.ClipsDescendants = true
@@ -126,6 +268,7 @@ PanelCorner.Parent = Panel
 local Header = Instance.new("Frame")
 Header.Size = UDim2.new(1, 0, 0, 50)
 Header.BackgroundColor3 = THEME.HeaderBar
+Header.Active = true
 Header.Parent = Panel
 
 local HeaderCorner = Instance.new("UICorner")
@@ -169,63 +312,96 @@ local SubBar = Instance.new("TextLabel")
 SubBar.Size = UDim2.new(1, 0, 0, 30)
 SubBar.Position = UDim2.new(0, 0, 0, 50)
 SubBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-SubBar.Text = "OTIMIZAÇÃO GRÁFICA"
+SubBar.Text = "PAINEL VISUAL — SEM FUNÇÕES ATIVAS"
 SubBar.Font = Enum.Font.GothamBold
 SubBar.TextSize = 14
 SubBar.TextColor3 = THEME.AccentLight
 SubBar.Parent = Panel
 
--- ==== BOTÃO ÚNICO: OTIMIZAÇÃO ====
-local Row = Instance.new("TextButton")
-Row.Size = UDim2.new(1, -40, 0, 50)
-Row.Position = UDim2.new(0, 20, 0, 100)
-Row.BackgroundColor3 = THEME.RowOff
-Row.AutoButtonColor = false
-Row.Text = ""
-Row.Parent = Panel
+-- Lista de itens
+local ListHolder = Instance.new("Frame")
+ListHolder.Size = UDim2.new(1, -40, 1, -136)
+ListHolder.Position = UDim2.new(0, 20, 0, 90)
+ListHolder.BackgroundTransparency = 1
+ListHolder.Parent = Panel
 
-local RowCorner = Instance.new("UICorner")
-RowCorner.CornerRadius = UDim.new(0, 8)
-RowCorner.Parent = Row
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ListLayout.Padding = UDim.new(0, 8)
+ListLayout.Parent = ListHolder
 
-local RowLabel = Instance.new("TextLabel")
-RowLabel.Size = UDim2.new(1, -20, 1, 0)
-RowLabel.Position = UDim2.new(0, 10, 0, 0)
-RowLabel.BackgroundTransparency = 1
-RowLabel.Text = "OTIMIZAÇÃO GRÁFICA: OFF"
-RowLabel.Font = Enum.Font.GothamBold
-RowLabel.TextSize = 16
-RowLabel.TextColor3 = THEME.TextOff
-RowLabel.TextXAlignment = Enum.TextXAlignment.Center
-RowLabel.Parent = Row
+local function addToggleRow(name, order)
+    local row = Instance.new("TextButton")
+    row.LayoutOrder = order
+    row.Size = UDim2.new(1, 0, 0, 44)
+    row.BackgroundColor3 = THEME.RowOff
+    row.AutoButtonColor = false
+    row.Text = ""
+    row.Parent = ListHolder
 
-local Desc = Instance.new("TextLabel")
-Desc.Size = UDim2.new(1, -40, 0, 60)
-Desc.Position = UDim2.new(0, 20, 0, 165)
-Desc.BackgroundTransparency = 1
-Desc.Text = "Remove texturas/decais, desativa partículas e trails, e simplifica os materiais para melhorar o FPS."
-Desc.Font = Enum.Font.Gotham
-Desc.TextSize = 13
-Desc.TextWrapped = true
-Desc.TextColor3 = Color3.fromRGB(200, 200, 200)
-Desc.TextXAlignment = Enum.TextXAlignment.Left
-Desc.TextYAlignment = Enum.TextYAlignment.Top
-Desc.Parent = Panel
+    local rowCorner = Instance.new("UICorner")
+    rowCorner.CornerRadius = UDim.new(0, 8)
+    rowCorner.Parent = row
 
-Row.MouseButton1Click:Connect(function()
-    OPTIMIZE_ENABLED = not OPTIMIZE_ENABLED
-    if OPTIMIZE_ENABLED then
-        Row.BackgroundColor3 = THEME.RowOn
-        RowLabel.Text = "OTIMIZAÇÃO GRÁFICA: ON"
-        RowLabel.TextColor3 = THEME.TextOn
-        enableOptimization()
-    else
-        Row.BackgroundColor3 = THEME.RowOff
-        RowLabel.Text = "OTIMIZAÇÃO GRÁFICA: OFF"
-        RowLabel.TextColor3 = THEME.TextOff
-        disableOptimization()
-    end
-end)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -20, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name .. ": OFF"
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 15
+    label.TextColor3 = THEME.TextOff
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.Parent = row
+
+    local state = false
+    local isOptimizer = (name == "BLITZ CURLER OPTIMIZER")
+    local isShadowToggle = (name == "AIMBOT")
+    local isPingToggle = (name == "CONTADOR DE PING")
+
+    row.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            row.BackgroundColor3 = THEME.RowOn
+            label.Text = name .. ": ON"
+            label.TextColor3 = THEME.TextOn
+        else
+            row.BackgroundColor3 = THEME.RowOff
+            label.Text = name .. ": OFF"
+            label.TextColor3 = THEME.TextOff
+        end
+
+        -- Somente estes itens chamam função real de jogo.
+        if isOptimizer then
+            OPTIMIZE_ENABLED = state
+            if OPTIMIZE_ENABLED then
+                enableOptimization()
+            else
+                disableOptimization()
+            end
+        end
+
+        if isShadowToggle then
+            if state then
+                lowShadows()
+            else
+                restoreShadows()
+            end
+        end
+
+        if isPingToggle then
+            if state then
+                enablePingCounter()
+            else
+                disablePingCounter()
+            end
+        end
+    end)
+end
+
+for i, itemName in ipairs(MENU_ITEMS) do
+    addToggleRow(itemName, i)
+end
 
 -- ==== RODAPÉ: MINIMIZAR MENU ====
 local Footer = Instance.new("TextButton")
@@ -260,8 +436,6 @@ Footer.MouseButton1Click:Connect(closePanel)
 
 local panelDragging = false
 local panelDragStart, panelStartPos
-
-Header.Active = true
 
 Header.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
