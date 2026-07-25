@@ -41,8 +41,8 @@ local THEME = {
 }
 
 -- Itens do menu: prtt71 (otimização), AIMBOT (reduz sombras),
--- CONTADOR DE PING, COORDENADAS, CONTADOR DE FPS e
--- MODO PRETO E BRANCO — todas com função real
+-- CONTADOR DE PING, COORDENADAS, CONTADOR DE FPS,
+-- MODO PRETO E BRANCO e AUMENTAR CONTRASTE — todas com função real
 local MENU_ITEMS = {
     "prtt71",
     "AIMBOT",
@@ -50,6 +50,7 @@ local MENU_ITEMS = {
     "COORDENADAS",
     "CONTADOR DE FPS",
     "MODO PRETO E BRANCO",
+    "AUMENTAR CONTRASTE",
 }
 
 ----------------------------------------------------------------
@@ -390,25 +391,54 @@ local function disableFpsCounter()
 end
 
 ----------------------------------------------------------------
--- LÓGICA REAL: MODO PRETO E BRANCO (conforto noturno)
+-- LÓGICA REAL: MODO PRETO E BRANCO + AUMENTAR CONTRASTE
+-- (compartilham o mesmo ColorCorrectionEffect, cada um mexe
+-- só na propriedade que é dele)
 ----------------------------------------------------------------
 
 local ColorCorrection
+local BW_ON = false
+local CONTRAST_ON = false
+local CONTRAST_AMOUNT = 0.3 -- de 0 a 1, ajustado pelo slider
 
-local function enableBlackAndWhite()
+local function ensureColorCorrection()
     if not ColorCorrection then
         ColorCorrection = Instance.new("ColorCorrectionEffect")
-        ColorCorrection.Name = "BlackAndWhiteEffect"
+        ColorCorrection.Name = "BlitzColorCorrection"
         ColorCorrection.Parent = Lighting
     end
-    ColorCorrection.Saturation = -1
-    ColorCorrection.Enabled = true
+end
+
+local function updateColorCorrection()
+    ensureColorCorrection()
+    ColorCorrection.Saturation = BW_ON and -1 or 0
+    ColorCorrection.Contrast = CONTRAST_ON and CONTRAST_AMOUNT or 0
+    ColorCorrection.Enabled = BW_ON or CONTRAST_ON
+end
+
+local function enableBlackAndWhite()
+    BW_ON = true
+    updateColorCorrection()
 end
 
 local function disableBlackAndWhite()
-    if ColorCorrection then
-        ColorCorrection.Enabled = false
-    end
+    BW_ON = false
+    updateColorCorrection()
+end
+
+local function enableContrast()
+    CONTRAST_ON = true
+    updateColorCorrection()
+end
+
+local function disableContrast()
+    CONTRAST_ON = false
+    updateColorCorrection()
+end
+
+local function setContrastAmount(value)
+    CONTRAST_AMOUNT = math.clamp(value, 0, 1)
+    updateColorCorrection()
 end
 
 ----------------------------------------------------------------
@@ -439,8 +469,8 @@ BubbleCorner.Parent = Bubble
 -- ==== PAINEL PRINCIPAL ====
 local Panel = Instance.new("Frame")
 Panel.Name = "Panel"
-Panel.Size = UDim2.new(0, 420, 0, 480)
-Panel.Position = UDim2.new(0, 100, 0.5, -240)
+Panel.Size = UDim2.new(0, 420, 0, 420)
+Panel.Position = UDim2.new(0, 100, 0.5, -210)
 Panel.BackgroundColor3 = THEME.Background
 Panel.Visible = false
 Panel.ClipsDescendants = true
@@ -504,11 +534,16 @@ SubBar.TextSize = 14
 SubBar.TextColor3 = THEME.AccentLight
 SubBar.Parent = Panel
 
--- Lista de itens
-local ListHolder = Instance.new("Frame")
+-- Lista de itens (com scroll, caso não caiba tudo no painel)
+local ListHolder = Instance.new("ScrollingFrame")
 ListHolder.Size = UDim2.new(1, -40, 1, -136)
 ListHolder.Position = UDim2.new(0, 20, 0, 90)
 ListHolder.BackgroundTransparency = 1
+ListHolder.BorderSizePixel = 0
+ListHolder.ScrollBarThickness = 6
+ListHolder.ScrollBarImageColor3 = THEME.AccentLight
+ListHolder.CanvasSize = UDim2.new(0, 0, 0, 0)
+ListHolder.AutomaticCanvasSize = Enum.AutomaticSize.Y
 ListHolder.Parent = Panel
 
 local ListLayout = Instance.new("UIListLayout")
@@ -547,6 +582,7 @@ local function addToggleRow(name, order)
     local isCoordsToggle = (name == "COORDENADAS")
     local isFpsToggle = (name == "CONTADOR DE FPS")
     local isBwToggle = (name == "MODO PRETO E BRANCO")
+    local isContrastToggle = (name == "AUMENTAR CONTRASTE")
 
     row.MouseButton1Click:Connect(function()
         state = not state
@@ -609,11 +645,110 @@ local function addToggleRow(name, order)
                 disableBlackAndWhite()
             end
         end
+
+        if isContrastToggle then
+            if state then
+                enableContrast()
+            else
+                disableContrast()
+            end
+        end
     end)
 end
 
+local contrastItemOrder
 for i, itemName in ipairs(MENU_ITEMS) do
-    addToggleRow(itemName, i)
+    local order = i * 10
+    addToggleRow(itemName, order)
+    if itemName == "AUMENTAR CONTRASTE" then
+        contrastItemOrder = order
+    end
+end
+
+----------------------------------------------------------------
+-- SLIDER: intensidade do contraste (0.00 a 1.00)
+----------------------------------------------------------------
+
+if contrastItemOrder then
+    local SliderRow = Instance.new("Frame")
+    SliderRow.LayoutOrder = contrastItemOrder + 1
+    SliderRow.Size = UDim2.new(1, 0, 0, 40)
+    SliderRow.BackgroundTransparency = 1
+    SliderRow.Parent = ListHolder
+
+    local ValueLabel = Instance.new("TextLabel")
+    ValueLabel.Size = UDim2.new(1, 0, 0, 16)
+    ValueLabel.Position = UDim2.new(0, 0, 0, 0)
+    ValueLabel.BackgroundTransparency = 1
+    ValueLabel.Text = string.format("Intensidade: %.2f", CONTRAST_AMOUNT)
+    ValueLabel.Font = Enum.Font.Gotham
+    ValueLabel.TextSize = 13
+    ValueLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    ValueLabel.Parent = SliderRow
+
+    local Track = Instance.new("Frame")
+    Track.Name = "Track"
+    Track.Size = UDim2.new(1, -20, 0, 2)
+    Track.Position = UDim2.new(0, 10, 0, 28)
+    Track.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Track.BorderSizePixel = 0
+    Track.Parent = SliderRow
+
+    local Knob = Instance.new("Frame")
+    Knob.Name = "Knob"
+    Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    Knob.Size = UDim2.new(0, 18, 0, 18)
+    Knob.Position = UDim2.new(CONTRAST_AMOUNT, 0, 0.5, 0)
+    Knob.BackgroundColor3 = THEME.AccentLight
+    Knob.BorderSizePixel = 0
+    Knob.Active = true
+    Knob.Parent = Track
+
+    local KnobCorner = Instance.new("UICorner")
+    KnobCorner.CornerRadius = UDim.new(1, 0)
+    KnobCorner.Parent = Knob
+
+    local sliderDragging = false
+
+    local function setFromInputPos(inputX)
+        local trackAbsPos = Track.AbsolutePosition.X
+        local trackAbsSize = Track.AbsoluteSize.X
+        local pct = (inputX - trackAbsPos) / trackAbsSize
+        pct = math.clamp(pct, 0, 1)
+        Knob.Position = UDim2.new(pct, 0, 0.5, 0)
+        ValueLabel.Text = string.format("Intensidade: %.2f", pct)
+        setContrastAmount(pct)
+    end
+
+    Knob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            sliderDragging = true
+
+            local conn
+            conn = input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    sliderDragging = false
+                    conn:Disconnect()
+                end
+            end)
+        end
+    end)
+
+    -- Também permite clicar direto na trilha para pular pro valor
+    Track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            setFromInputPos(input.Position.X)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if sliderDragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
+            setFromInputPos(input.Position.X)
+        end
+    end)
 end
 
 -- ==== RODAPÉ: MINIMIZAR MENU ====
