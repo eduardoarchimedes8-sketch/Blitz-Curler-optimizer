@@ -1,15 +1,8 @@
 --[[
-    BLITZ CURLER OPTIMIZER — VERSÃO SOMENTE VISUAL (5 ITENS)
+    BLITZ CURLER OPTIMIZER — VERSÃO SEM AIMBOT
     ----------------------------------------------------------
     Bolinha arrastável (com imagem customizada) + painel
-    roxo/azul, com 5 itens de menu:
-    AIMBOT, BLITZ CURLER OPTIMIZER, ESP, TEAM CHECK, TP BASE CRIMINAL
-
-    IMPORTANTE: nenhum desses botões executa qualquer função
-    de jogo. Cada um SOMENTE troca o próprio texto/cor entre
-    ON e OFF (efeito visual). Não há mira automática, não há
-    detecção de jogadores, não há teleporte, não há nada que
-    altere o comportamento do jogo — é só a casca da interface.
+    roxo/azul, com os itens de menu restantes.
 
     Como usar:
     - Cole este script em um LocalScript dentro do StarterGui.
@@ -29,23 +22,20 @@ local ScreenGui -- declarado aqui, criado mais abaixo
 local ICON_ID = "rbxassetid://93373199521665"
 
 local THEME = {
-    Background   = Color3.fromRGB(28, 18, 48),
-    HeaderBar    = Color3.fromRGB(18, 10, 34),
-    Accent       = Color3.fromRGB(90, 60, 200),
-    AccentLight  = Color3.fromRGB(130, 100, 255),
-    RowOff       = Color3.fromRGB(60, 20, 20),
-    RowOn        = Color3.fromRGB(20, 60, 30),
-    TextMain     = Color3.fromRGB(255, 255, 255),
-    TextOn       = Color3.fromRGB(150, 255, 150),
-    TextOff      = Color3.fromRGB(255, 210, 90),
+    Background     = Color3.fromRGB(28, 18, 48),
+    HeaderBar      = Color3.fromRGB(18, 10, 34),
+    Accent         = Color3.fromRGB(90, 60, 200),
+    AccentLight    = Color3.fromRGB(130, 100, 255),
+    RowOff         = Color3.fromRGB(60, 20, 20),
+    RowOn          = Color3.fromRGB(20, 60, 30),
+    TextMain       = Color3.fromRGB(255, 255, 255),
+    TextOn         = Color3.fromRGB(150, 255, 150),
+    TextOff        = Color3.fromRGB(255, 210, 90),
 }
 
--- Itens do menu: prtt71 (otimização), AIMBOT (reduz sombras),
--- CONTADOR DE PING, COORDENADAS, CONTADOR DE FPS,
--- MODO PRETO E BRANCO e AUMENTAR CONTRASTE — todas com função real
+-- Itens do menu (AIMBOT removido)
 local MENU_ITEMS = {
     "prtt71",
-    "AIMBOT",
     "CONTADOR DE PING",
     "COORDENADAS",
     "CONTADOR DE FPS",
@@ -56,21 +46,13 @@ local MENU_ITEMS = {
 ----------------------------------------------------------------
 -- LÓGICA REAL: OTIMIZAÇÃO GRÁFICA (item BLITZ CURLER OPTIMIZER)
 ----------------------------------------------------------------
--- Observação importante: Texturas e Decais são DELETADOS pela
--- otimização (Destroy()). Uma vez deletados, não existe forma
--- de "recriar" o objeto original — isso é uma limitação de
--- qualquer script que apague instâncias, não só deste.
--- Já Material, Reflectance, e Enabled (de partículas/trails)
--- são apenas alterados, então guardamos o valor original de
--- cada um para poder devolver de verdade ao desativar.
-
 local OPTIMIZE_ENABLED = false
 local descendantConn
-local originalValues = {} -- [instancia] = {Material=..., Reflectance=..., Enabled=...}
+local originalValues = {}
 
 local function optimize(obj)
     if obj:IsA("Texture") or obj:IsA("Decal") then
-        obj:Destroy() -- irreversível: não há como restaurar depois
+        obj:Destroy()
 
     elseif obj:IsA("BasePart") then
         if not originalValues[obj] then
@@ -116,52 +98,10 @@ local function disableOptimization()
         descendantConn = nil
     end
 
-    -- Restaura Material/Reflectance/Enabled de tudo que foi alterado
     for obj, data in pairs(originalValues) do
         restoreOne(obj, data)
     end
     table.clear(originalValues)
-
-    -- Texturas/Decais destruídos NÃO voltam (foram apagados de vez)
-end
-
-----------------------------------------------------------------
--- LÓGICA REAL: REDUZIR SOMBRAS (item "AIMBOT" — nome é só
--- brincadeira, a função só mexe na iluminação/sombras)
-----------------------------------------------------------------
-
-local Lighting = game:GetService("Lighting")
-
-local SHADOWS_ENABLED_ORIGINAL
-local GLOBAL_SHADOWS_ORIGINAL
-
-local function lowShadows()
-    -- Guarda os valores originais na primeira vez, para
-    -- poder devolver depois
-    if SHADOWS_ENABLED_ORIGINAL == nil then
-        SHADOWS_ENABLED_ORIGINAL = Lighting.GlobalShadows
-    end
-
-    Lighting.GlobalShadows = false
-
-    -- Reduz também a sombra "de contato" das partes, se existir
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") then
-            v.CastShadow = false
-        end
-    end
-end
-
-local function restoreShadows()
-    if SHADOWS_ENABLED_ORIGINAL ~= nil then
-        Lighting.GlobalShadows = SHADOWS_ENABLED_ORIGINAL
-    end
-
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") then
-            v.CastShadow = true
-        end
-    end
 end
 
 ----------------------------------------------------------------
@@ -392,14 +332,13 @@ end
 
 ----------------------------------------------------------------
 -- LÓGICA REAL: MODO PRETO E BRANCO + AUMENTAR CONTRASTE
--- (compartilham o mesmo ColorCorrectionEffect, cada um mexe
--- só na propriedade que é dele)
 ----------------------------------------------------------------
 
+local Lighting = game:GetService("Lighting")
 local ColorCorrection
 local BW_ON = false
 local CONTRAST_ON = false
-local CONTRAST_AMOUNT = 0.3 -- de 0 a 1, ajustado pelo slider
+local CONTRAST_AMOUNT = 0.3
 
 local function ensureColorCorrection()
     if not ColorCorrection then
@@ -528,13 +467,13 @@ local SubBar = Instance.new("TextLabel")
 SubBar.Size = UDim2.new(1, 0, 0, 30)
 SubBar.Position = UDim2.new(0, 0, 0, 50)
 SubBar.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-SubBar.Text = "PAINEL VISUAL — SEM FUNÇÕES ATIVAS"
+SubBar.Text = "PAINEL VISUAL — SEM AIMBOT"
 SubBar.Font = Enum.Font.GothamBold
 SubBar.TextSize = 14
 SubBar.TextColor3 = THEME.AccentLight
 SubBar.Parent = Panel
 
--- Lista de itens (com scroll, caso não caiba tudo no painel)
+-- Lista de itens
 local ListHolder = Instance.new("ScrollingFrame")
 ListHolder.Size = UDim2.new(1, -40, 1, -136)
 ListHolder.Position = UDim2.new(0, 20, 0, 90)
@@ -577,7 +516,6 @@ local function addToggleRow(name, order)
 
     local state = false
     local isOptimizer = (name == "prtt71")
-    local isShadowToggle = (name == "AIMBOT")
     local isPingToggle = (name == "CONTADOR DE PING")
     local isCoordsToggle = (name == "COORDENADAS")
     local isFpsToggle = (name == "CONTADOR DE FPS")
@@ -596,21 +534,12 @@ local function addToggleRow(name, order)
             label.TextColor3 = THEME.TextOff
         end
 
-        -- Somente estes itens chamam função real de jogo.
         if isOptimizer then
             OPTIMIZE_ENABLED = state
             if OPTIMIZE_ENABLED then
                 enableOptimization()
             else
                 disableOptimization()
-            end
-        end
-
-        if isShadowToggle then
-            if state then
-                lowShadows()
-            else
-                restoreShadows()
             end
         end
 
@@ -666,7 +595,7 @@ for i, itemName in ipairs(MENU_ITEMS) do
 end
 
 ----------------------------------------------------------------
--- SLIDER: intensidade do contraste (0.00 a 1.00)
+-- SLIDER: intensidade do contraste
 ----------------------------------------------------------------
 
 if contrastItemOrder then
@@ -735,7 +664,6 @@ if contrastItemOrder then
         end
     end)
 
-    -- Também permite clicar direto na trilha para pular pro valor
     Track.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
@@ -816,7 +744,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 ----------------------------------------------------------------
--- BOLINHA ARRASTÁVEL (drag manual, funciona em PC e mobile)
+-- BOLINHA ARRASTÁVEL
 ----------------------------------------------------------------
 
 local dragging = false
