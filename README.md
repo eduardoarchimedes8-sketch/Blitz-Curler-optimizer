@@ -1,5 +1,5 @@
 --[[
-    BLITZ CURLER OPTIMIZER — VERSÃO COM 1 FUNÇÃO REAL
+    BLITZ CURLER OPTIMIZER . — VERSÃO COM 1 FUNÇÃO REAL
     ----------------------------------------------------
     Bolinha arrastável (com imagem customizada) + painel
     roxo/azul, com APENAS UMA opção funcional: Otimização
